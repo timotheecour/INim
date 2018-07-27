@@ -3,10 +3,15 @@
 import os, osproc, rdstdin, strutils, terminal, times, strformat
 
 type App = ref object
+    ## cmd line options
     nim: string
     srcFile: string
     showHeader: bool
+    interactive: bool
+    ## state (TODO: split from cmd line options)
+    fileData: string # used when srcFile is used
 
+## TODO: avoid global variables
 var app:App
 
 const
@@ -58,7 +63,8 @@ proc welcomeScreen() =
 proc cleanExit() {.noconv.} =
     buffer.close()
     removeFile(bufferSource) # Temp .nim
-    removeFile(bufferSource[0..^5]) # Temp binary, same filename just without ".nim"
+    let exe = bufferSource.changeFileExt(ExeExt)
+    removeFile(exe)
     removeDir(getTempDir() & "nimcache")
     quit(0)
 
@@ -237,23 +243,22 @@ proc runForever() =
         # Clean up
         tempIndentCode = ""
 
-proc main(nim="nim", srcFile = "", showHeader = true) =
+proc main(nim="nim", srcFile = "", showHeader = true, interactive = true) =
     ## inim interpreter
     app.new()
     app.nim=nim
     app.srcFile=srcFile
     app.showHeader=showHeader
+    app.interactive=interactive
 
     if app.showHeader: welcomeScreen()
 
+    var fileData: string
     if srcFile.len > 0:
         doAssert(srcFile.fileExists, "cannot access " & srcFile)
-        doAssert(srcFile.splitFile.ext == ".nim")
-        let fileData = getFileData(srcFile)
-        init(fileData)
-    else:
-        init() # Clean init
-    
+        doAssert srcFile.splitFile.ext == ".nim"
+        app.fileData = getFileData(srcFile)
+    init(app.fileData)
     runForever()
 
 when isMainModule:
@@ -262,4 +267,5 @@ when isMainModule:
             "nim": "path to nim compiler",
             "srcFile": "nim script to preload/run",
             "showHeader": "show program info startup",
+            "interactive": "when false, exits when script finishes running",
         })
